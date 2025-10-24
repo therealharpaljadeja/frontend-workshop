@@ -1,21 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Header from '@/components/Header';
+import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import MessageDisplay from '@/components/MessageDisplay';
 import MessageForm from '@/components/MessageForm';
-import {
-  connectWallet,
-  getMessageBoardData,
-  updateMessage,
-  isWalletConnected,
-  getConnectedAddress,
-  type MessageBoardData,
-} from '@/lib/contract';
+import { CONTRACT_ADDRESS, MESSAGE_BOARD_ABI } from '@/lib/wagmi';
+
+interface MessageBoardData {
+  message: string;
+  author: string;
+  messageCount: number;
+}
 
 export default function Home() {
-  const [isConnected, setIsConnected] = useState(false);
-  const [address, setAddress] = useState<string>('');
+  const { isConnected } = useAccount();
   const [messageData, setMessageData] = useState<MessageBoardData>({
     message: 'Loading...',
     author: '0x0000000000000000000000000000000000000000',
@@ -23,38 +22,64 @@ export default function Home() {
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Read message from contract - refetch every 2 seconds
+  const { data: message } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: MESSAGE_BOARD_ABI,
+    functionName: 'getMessage',
+    query: {
+      refetchInterval: 2000,
+    },
+  });
+
+  // Read author from contract
+  const { data: author, refetch: refetchAuthor } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: MESSAGE_BOARD_ABI,
+    functionName: 'author',
+    query: {
+      refetchInterval: 2000,
+    },
+  });
+
+  // Read message count from contract
+  const { data: messageCount, refetch: refetchMessageCount } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: MESSAGE_BOARD_ABI,
+    functionName: 'messageCount',
+    query: {
+      refetchInterval: 2000,
+    },
+  });
+
+  const { writeContract, data: hash } = useWriteContract();
+  
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = 
+    useWaitForTransactionReceipt({ 
+      hash,
+    });
+
   // Load initial data
   useEffect(() => {
     loadData();
-  }, []);
+  }, [message, author, messageCount]);
+
+  useEffect(() => {
+    if (isConfirmed) {
+      loadData();
+      setIsLoading(false);
+    }
+  }, [isConfirmed]);
 
   const loadData = async () => {
     try {
-      // Check if wallet is already connected
-      const connected = await isWalletConnected();
-      setIsConnected(connected);
-
-      if (connected) {
-        const addr = await getConnectedAddress();
-        if (addr) setAddress(addr);
-      }
-
-      // Load message board data
-      const data = await getMessageBoardData();
-      setMessageData(data);
+      setMessageData({
+        message: (message as string) || 'No message yet',
+        author: (author as string) || '0x0000000000000000000000000000000000000000',
+        messageCount: Number(messageCount) || 0,
+      });
     } catch (error) {
       console.error('Error loading data:', error);
-    }
-  };
-
-  const handleConnect = async () => {
-    try {
-      const addr = await connectWallet();
-      setAddress(addr);
-      setIsConnected(true);
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-      alert('Failed to connect wallet. Make sure you have MetaMask installed!');
     }
   };
 
@@ -66,25 +91,32 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      await updateMessage(newMessage);
-      // Reload data after successful update
-      await loadData();
-      alert('Message updated successfully!');
+      writeContract({
+        address: CONTRACT_ADDRESS,
+        abi: MESSAGE_BOARD_ABI,
+        functionName: 'updateMessage',
+        args: [newMessage],
+      });
     } catch (error) {
       console.error('Error updating message:', error);
-      throw error;
-    } finally {
       setIsLoading(false);
+      throw error;
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header
-        isConnected={isConnected}
-        address={address}
-        onConnect={handleConnect}
-      />
+      {/* Header with RainbowKit Connect Button */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center">
+              <h1 className="text-2xl font-bold text-gray-900">MessageBoard DApp</h1>
+            </div>
+            <ConnectButton />
+          </div>
+        </div>
+      </header>
 
       <main className="max-w-4xl mx-auto px-4 py-12">
         <div className="mb-8">
@@ -96,7 +128,7 @@ export default function Home() {
         </div>
 
         <div>
-          <MessageForm onSubmit={handleUpdateMessage} isLoading={isLoading} />
+          <MessageForm onSubmit={handleUpdateMessage} isLoading={isLoading || isConfirming} />
         </div>
 
        
@@ -104,7 +136,7 @@ export default function Home() {
 
       <footer className="max-w-4xl mx-auto px-4 py-8 text-center">
         <p className="text-gray-600 text-sm">
-          Built with Next.js, TypeScript, and Tailwind CSS
+          Built with Next.js, TypeScript, Tailwind CSS, Wagmi, and RainbowKit
         </p>
       </footer>
     </div>
