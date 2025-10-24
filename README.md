@@ -412,15 +412,6 @@ export default function Home() {
 }
 ```
 
-## 🎯 Key Features Implemented
-
-- **RainbowKit** wallet connection with beautiful UI
-- **useReadContract** for reading blockchain data (getMessage, author, messageCount)
-- **useWriteContract** for updating messages on-chain
-- **useWaitForTransactionReceipt** for transaction confirmation
-- **Auto-refresh** every 2 seconds to keep data in sync
-- **Modern UI** with Tailwind CSS
-
 ## 🏃 Run the App
 
 ```bash
