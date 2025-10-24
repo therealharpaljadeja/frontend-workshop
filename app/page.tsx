@@ -52,9 +52,9 @@ export default function Home() {
     },
   });
 
-  const { writeContract, data: hash } = useWriteContract();
+  const { writeContractAsync, data: hash } = useWriteContract();
   
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = 
+  const { isLoading: isConfirming } = 
     useWaitForTransactionReceipt({ 
       hash,
     });
@@ -63,13 +63,6 @@ export default function Home() {
   useEffect(() => {
     loadData();
   }, [message, author, messageCount]);
-
-  useEffect(() => {
-    if (isConfirmed) {
-      loadData();
-      setIsLoading(false);
-    }
-  }, [isConfirmed]);
 
   const loadData = async () => {
     try {
@@ -91,7 +84,7 @@ export default function Home() {
 
     setIsLoading(true);
     try {
-      writeContract({
+      await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: MESSAGE_BOARD_ABI,
         functionName: 'updateMessage',
@@ -99,8 +92,9 @@ export default function Home() {
       });
     } catch (error) {
       console.error('Error updating message:', error);
-      setIsLoading(false);
       throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
